@@ -1,11 +1,10 @@
-from common import *
+from common import *  # isort:skip
+
 from mock_storage import mock_storage
-
 from storage import cache
-from trezor.messages import Initialize
-from trezor.messages import EndSession
+from trezor.messages import EndSession, Initialize
 
-from apps.base import handle_Initialize, handle_EndSession
+from apps.base import handle_EndSession, handle_Initialize
 
 KEY = 0
 
@@ -114,7 +113,7 @@ class TestStorageCache(unittest.TestCase):
         self.assertIsNone(cache.get(KEY))
 
         cache.set(KEY, b"hello")
-        session_id2 = cache.start_session()
+        cache.start_session()
         self.assertIsNone(cache.get(KEY))
         cache.set(KEY, b"hello")
         self.assertEqual(cache.get(KEY), b"hello")
@@ -220,7 +219,7 @@ class TestStorageCache(unittest.TestCase):
 
     def test_EndSession(self):
         self.assertRaises(cache.InvalidSessionError, cache.get, KEY)
-        session_id = cache.start_session()
+        cache.start_session()
         self.assertTrue(is_session_started())
         self.assertIsNone(cache.get(KEY))
         await_result(handle_EndSession(EndSession()))

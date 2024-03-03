@@ -1,6 +1,9 @@
-from common import *
+from common import *  # isort:skip
 
-from trezorio import sdcard, fatfs
+from trezor import utils
+
+if utils.USE_SD_CARD:
+    from trezorio import fatfs, sdcard
 
 
 class TestTrezorIoFatfs(unittest.TestCase):
@@ -225,4 +228,5 @@ class TestTrezorIoFatfsAndSdcard(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    if utils.USE_SD_CARD:
+        unittest.main()

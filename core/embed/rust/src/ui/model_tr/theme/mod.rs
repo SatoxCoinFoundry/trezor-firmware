@@ -63,6 +63,7 @@ pub fn textstyle_number(num: i32) -> &'static TextStyle {
 include_icon!(ICON_ARM_LEFT, "model_tr/res/arm_left.toif"); // 10*6
 include_icon!(ICON_ARM_RIGHT, "model_tr/res/arm_right.toif"); // 10*6
 include_icon!(ICON_ARROW_LEFT, "model_tr/res/arrow_left.toif"); // 4*7
+include_icon!(ICON_ARROW_LEFT_BIG, "model_tr/res/arrow_left_big.toif"); // 8*7
 include_icon!(ICON_ARROW_RIGHT, "model_tr/res/arrow_right.toif"); // 4*7
 include_icon!(ICON_ARROW_RIGHT_FAT, "model_tr/res/arrow_right_fat.toif"); // 4*8
 include_icon!(
@@ -91,6 +92,7 @@ include_icon!(
 include_icon!(ICON_DEVICE_NAME, "model_tr/res/device_name.toif"); // 116*18
 include_icon!(ICON_EYE, "model_tr/res/eye_round.toif"); // 12*7
 include_icon!(ICON_LOCK, "model_tr/res/lock.toif"); // 10*10
+include_icon!(ICON_LOCK_SMALL, "model_tr/res/lock_small.toif"); // 6*7
 include_icon!(ICON_LOGO, "model_tr/res/logo_22_33.toif"); // 22*33
 include_icon!(ICON_LOGO_EMPTY, "model_tr/res/logo_22_33_empty.toif");
 include_icon!(

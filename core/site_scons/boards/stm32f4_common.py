@@ -4,10 +4,13 @@ from __future__ import annotations
 def stm32f4_common_files(env, defines, sources, paths):
     defines += [
         ("STM32_HAL_H", '"<stm32f4xx.h>"'),
+        ("FLASH_BLOCK_WORDS", "1"),
+        ("FLASH_BIT_ACCESS", "1"),
     ]
 
     paths += [
         "embed/trezorhal/stm32f4",
+        "vendor/micropython/lib/cmsis/inc",
         "vendor/micropython/lib/stm32lib/STM32F4xx_HAL_Driver/Inc",
         "vendor/micropython/lib/stm32lib/CMSIS/STM32F4xx/Include",
     ]
@@ -37,8 +40,11 @@ def stm32f4_common_files(env, defines, sources, paths):
 
     sources += [
         "embed/trezorhal/stm32f4/board_capabilities.c",
+        "embed/trezorhal/stm32f4/boot_args.c",
         "embed/trezorhal/stm32f4/common.c",
+        "embed/trezorhal/stm32f4/fault_handlers.c",
         "embed/trezorhal/stm32f4/flash.c",
+        "embed/trezorhal/stm32f4/flash_otp.c",
         "embed/trezorhal/stm32f4/lowlevel.c",
         "embed/trezorhal/stm32f4/mpu.c",
         "embed/trezorhal/stm32f4/platform.c",
@@ -65,5 +71,12 @@ def stm32f4_common_files(env, defines, sources, paths):
         "-I../trezorhal/stm32f4;"
         "-I../../vendor/micropython/lib/stm32lib/STM32F4xx_HAL_Driver/Inc;"
         "-I../../vendor/micropython/lib/stm32lib/CMSIS/STM32F4xx/Include;"
-        "-DSTM32_HAL_H=<stm32f4xx.h>"
+        "-I../../vendor/micropython/lib/cmsis/inc;"
+        "-DSTM32_HAL_H=<stm32f4xx.h>;"
+        "-DSTM32F4;"
+        "-DFLASH_BLOCK_WORDS=1;"
+        "-DFLASH_BIT_ACCESS=1;"
     )
+
+    env.get("ENV")["SUFFIX"] = "stm32f4"
+    env.get("ENV")["LINKER_SCRIPT"] = "stm32f4"

@@ -24,26 +24,35 @@ from .util import FirmwareHashParameters
 if t.TYPE_CHECKING:
     from typing_extensions import Self
 
+    from ..models import TrezorModel
+
 
 class Model(Enum):
     T1B1 = b"T1B1"
     T2T1 = b"T2T1"
+    T3T1 = b"T3T1"
     T2B1 = b"T2B1"
     D001 = b"D001"
+    D002 = b"D002"
 
     # legacy aliases
-    ONE = T1B1
-    T = T2T1
-    R = T2B1
-    DISC1 = D001
+    ONE = b"T1B1"
+    T = b"T2T1"
+    R = b"T2B1"
+    DISC1 = b"D001"
+    DISC2 = b"D002"
 
     @classmethod
-    def from_hw_model(cls, hw_model: t.Union["Self", bytes]) -> "Self":
+    def from_hw_model(cls, hw_model: t.Union["Self", bytes]) -> "Model":
         if isinstance(hw_model, cls):
             return hw_model
         if hw_model == b"\x00\x00\x00\x00":
             return cls.T2T1
         raise ValueError(f"Unknown hardware model: {hw_model}")
+
+    @classmethod
+    def from_trezor_model(cls, trezor_model: "TrezorModel") -> "Self":
+        return cls(trezor_model.internal_name.encode("ascii"))
 
     def model_keys(self, dev_keys: bool = False) -> "ModelKeys":
         if dev_keys:
@@ -213,6 +222,29 @@ T2B1 = ModelKeys(
     firmware_sigs_needed=-1,
 )
 
+T3T1 = ModelKeys(
+    production=False,
+    boardloader_keys=[
+        bytes.fromhex(key)
+        for key in (
+            "db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d",
+            "2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12",
+            "22fc297792f0b6ffc0bfcfdb7edb0c0aa14e025a365ec0e342e86e3829cb74b6",
+        )
+    ],
+    boardloader_sigs_needed=2,
+    bootloader_keys=[
+        bytes.fromhex(key)
+        for key in (
+            "d759793bbc13a2819a827c76adb6fba8a49aee007f49f2d0992d99b825ad2c48",
+            "6355691c178a8ff91007a7478afb955ef7352c63e7b25703984cf78b26e21a56",
+            "ee93a4f66f8d16b819bb9beb9ffccdfcdc1412e87fee6a324c2a99a1e0e67148",
+        )
+    ],
+    bootloader_sigs_needed=2,
+    firmware_keys=(),
+    firmware_sigs_needed=-1,
+)
 
 LEGACY_HASH_PARAMS = FirmwareHashParameters(
     hash_function=hashlib.sha256,
@@ -226,25 +258,43 @@ T2T1_HASH_PARAMS = FirmwareHashParameters(
     padding_byte=None,
 )
 
+T3T1_HASH_PARAMS = FirmwareHashParameters(
+    hash_function=hashlib.sha256,
+    chunk_size=1024 * 128,
+    padding_byte=None,
+)
+
+D002_HASH_PARAMS = FirmwareHashParameters(
+    hash_function=hashlib.sha256,
+    chunk_size=1024 * 256,
+    padding_byte=None,
+)
+
 MODEL_MAP = {
     Model.T1B1: LEGACY_V3,
     Model.T2T1: T2T1,
     Model.T2B1: T2B1,
+    Model.T3T1: TREZOR_CORE_DEV,
     Model.D001: TREZOR_CORE_DEV,
+    Model.D002: TREZOR_CORE_DEV,
 }
 
 MODEL_MAP_DEV = {
     Model.T1B1: LEGACY_V3_DEV,
     Model.T2T1: TREZOR_CORE_DEV,
     Model.T2B1: TREZOR_CORE_DEV,
+    Model.T3T1: TREZOR_CORE_DEV,
     Model.D001: TREZOR_CORE_DEV,
+    Model.D002: TREZOR_CORE_DEV,
 }
 
 MODEL_HASH_PARAMS_MAP = {
     Model.T1B1: LEGACY_HASH_PARAMS,
     Model.T2T1: T2T1_HASH_PARAMS,
+    Model.T3T1: T3T1_HASH_PARAMS,
     Model.T2B1: T2T1_HASH_PARAMS,
     Model.D001: T2T1_HASH_PARAMS,
+    Model.D002: D002_HASH_PARAMS,
 }
 
 # aliases
@@ -256,6 +306,7 @@ TREZOR_ONE_V3_DEV = LEGACY_V3_DEV
 
 TREZOR_T = T2T1
 TREZOR_R = T2B1
+TREZOR_T3T1 = T3T1
 TREZOR_T_DEV = TREZOR_CORE_DEV
 TREZOR_R_DEV = TREZOR_CORE_DEV
 
@@ -263,3 +314,5 @@ DISC1 = TREZOR_CORE_DEV
 DISC1_DEV = TREZOR_CORE_DEV
 D001 = TREZOR_CORE_DEV
 D001_DEV = TREZOR_CORE_DEV
+D002 = TREZOR_CORE_DEV
+D002_DEV = TREZOR_CORE_DEV

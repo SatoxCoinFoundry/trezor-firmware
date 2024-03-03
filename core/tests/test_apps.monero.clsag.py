@@ -1,11 +1,13 @@
-from common import *
+from common import *  # isort:skip
 
 if not utils.BITCOIN_ONLY:
-    from apps.monero.xmr import crypto, crypto_helpers, clsag
-    from apps.monero.xmr.serialize_messages.tx_ct_key import CtKey
+    import ubinascii
+
     from trezor.crypto import monero as tcry
     from trezor.crypto import random
-    import ubinascii
+
+    from apps.monero.xmr import clsag, crypto, crypto_helpers
+    from apps.monero.xmr.serialize_messages.tx_ct_key import CtKey
 
     point_mul8_into = tcry.ge25519_mul8
 
@@ -117,7 +119,9 @@ class TestMoneroClsag(unittest.TestCase):
             ring.append(tk)
 
         index = index if index is not None else random.uniform(len(ring))
-        ring.insert(index, TmpKey(crypto_helpers.encodepoint(P), crypto_helpers.encodepoint(C)))
+        ring.insert(
+            index, TmpKey(crypto_helpers.encodepoint(P), crypto_helpers.encodepoint(C))
+        )
         ring2 = list(ring)
         mg_buffer = []
 
@@ -137,7 +141,13 @@ class TestMoneroClsag(unittest.TestCase):
         )
 
         clsag.generate_clsag_simple(
-            msg, ring, CtKey(priv, msk), alpha, Cp, index, mg_buffer,
+            msg,
+            ring,
+            CtKey(priv, msk),
+            alpha,
+            Cp,
+            index,
+            mg_buffer,
         )
 
         sD = crypto_helpers.decodepoint(mg_buffer[-1])
@@ -156,7 +166,9 @@ class TestMoneroClsag(unittest.TestCase):
         sD = crypto_helpers.decodepoint(ubinascii.unhexlify(clsag["sD"]))
         sc1 = crypto_helpers.decodeint(ubinascii.unhexlify(clsag["sc1"]))
         Cout = crypto_helpers.decodepoint(ubinascii.unhexlify(clsag["cout"]))
-        scalars = [crypto_helpers.decodeint(ubinascii.unhexlify(x)) for x in clsag["ss"]]
+        scalars = [
+            crypto_helpers.decodeint(ubinascii.unhexlify(x)) for x in clsag["ss"]
+        ]
         ring = []
         for e in clsag["ring"]:
             ring.append(TmpKey(ubinascii.unhexlify(e[0]), ubinascii.unhexlify(e[1])))
@@ -325,7 +337,7 @@ class TestMoneroClsag(unittest.TestCase):
             sD = crypto.scalarmult_base_into(None, crypto.random_scalar())
             self.verify_clsag(msg, scalars, sc1, sI, sD, ring2, Cp)
 
-    def test_clsag_invalid_P(self):
+    def test_clsag_invalid_P_dest(self):
         res = self.gen_clsag_sig(ring_size=11, index=5)
         msg, scalars, sc1, sI, sD, ring2, Cp = res
         with self.assertRaises(ValueError):
@@ -334,7 +346,7 @@ class TestMoneroClsag(unittest.TestCase):
             )
             self.verify_clsag(msg, scalars, sc1, sI, sD, ring2, Cp)
 
-    def test_clsag_invalid_P(self):
+    def test_clsag_invalid_P_commitment(self):
         res = self.gen_clsag_sig(ring_size=11, index=5)
         msg, scalars, sc1, sI, sD, ring2, Cp = res
         with self.assertRaises(ValueError):

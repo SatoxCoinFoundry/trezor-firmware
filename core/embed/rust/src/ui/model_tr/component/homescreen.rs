@@ -1,10 +1,17 @@
 use crate::{
+    error::Error,
+    micropython::buffer::StrBuffer,
     strutil::StringType,
-    trezorhal::{display::ToifFormat, usb::usb_configured},
+    translations::TR,
+    trezorhal::usb::usb_configured,
     ui::{
         component::{Child, Component, Event, EventCtx, Label},
         constant::{HEIGHT, WIDTH},
-        display::{rect_fill, toif::Toif, Font, Icon},
+        display::{
+            self, rect_fill,
+            toif::{Toif, ToifFormat},
+            Font, Icon,
+        },
         event::USBEvent,
         geometry::{Alignment2D, Insets, Offset, Point, Rect},
         layout::util::get_user_custom_image,
@@ -13,7 +20,7 @@ use crate::{
 
 use super::{
     super::constant, common::display_center, theme, ButtonController, ButtonControllerMsg,
-    ButtonLayout, ButtonPos, CancelConfirmMsg,
+    ButtonLayout, ButtonPos, CancelConfirmMsg, LoaderMsg, ProgressLoader,
 };
 
 const AREA: Rect = constant::screen();
@@ -30,6 +37,8 @@ const NOTIFICATION_FONT: Font = Font::NORMAL;
 const NOTIFICATION_ICON: Icon = theme::ICON_WARNING;
 const COINJOIN_CORNER: Point = AREA.top_right().ofs(Offset::new(-2, 2));
 
+const HOLD_TO_LOCK_MS: u32 = 1000;
+
 fn paint_default_image() {
     theme::ICON_LOGO.draw(
         TOP_CENTER + Offset::y(LOGO_ICON_TOP_MARGIN),
@@ -37,6 +46,12 @@ fn paint_default_image() {
         theme::FG,
         theme::BG,
     );
+}
+
+enum CurrentScreen {
+    EmptyAtStart,
+    Homescreen,
+    Loader,
 }
 
 pub struct Homescreen<T>
@@ -48,19 +63,32 @@ where
     label: Label<T>,
     notification: Option<(T, u8)>,
     /// Used for HTC functionality to lock device from homescreen
-    invisible_buttons: Child<ButtonController<T>>,
+    invisible_buttons: Child<ButtonController>,
+    /// Holds the loader component
+    loader: Option<Child<ProgressLoader<T>>>,
+    /// Whether to show the loader or not
+    show_loader: bool,
+    /// Which screen is currently shown
+    current_screen: CurrentScreen,
 }
 
 impl<T> Homescreen<T>
 where
     T: StringType + Clone,
 {
-    pub fn new(label: T, notification: Option<(T, u8)>) -> Self {
-        let invisible_btn_layout = ButtonLayout::htc_none_htc("".into(), "".into());
+    pub fn new(label: T, notification: Option<(T, u8)>, loader_description: Option<T>) -> Self {
+        // Buttons will not be visible, we only need both left and right to be existing
+        // so we can get the events from them.
+        let invisible_btn_layout = ButtonLayout::text_none_text("".into(), "".into());
+        let loader =
+            loader_description.map(|desc| Child::new(ProgressLoader::new(desc, HOLD_TO_LOCK_MS)));
         Self {
             label: Label::centered(label, theme::TEXT_BIG),
             notification,
             invisible_buttons: Child::new(ButtonController::new(invisible_btn_layout)),
+            loader,
+            show_loader: false,
+            current_screen: CurrentScreen::EmptyAtStart,
         }
     }
 
@@ -82,10 +110,11 @@ where
         if !usb_configured() {
             self.fill_notification_background();
             // TODO: fill warning icons here as well?
-            display_center(baseline, &"NO USB CONNECTION", NOTIFICATION_FONT);
+            TR::homescreen__title_no_usb_connection
+                .map_translated(|t| display_center(baseline, t, NOTIFICATION_FONT));
         } else if let Some((notification, _level)) = &self.notification {
             self.fill_notification_background();
-            display_center(baseline, &notification.as_ref(), NOTIFICATION_FONT);
+            display_center(baseline, notification.as_ref(), NOTIFICATION_FONT);
             // Painting warning icons in top corners when the text is short enough not to
             // collide with them
             let icon_width = NOTIFICATION_ICON.toif.width();
@@ -148,24 +177,64 @@ where
 
     fn place(&mut self, bounds: Rect) -> Rect {
         self.label.place(LABEL_AREA);
+        self.loader.place(AREA);
         bounds
     }
 
     fn event(&mut self, ctx: &mut EventCtx, event: Event) -> Option<Self::Msg> {
         Self::event_usb(self, ctx, event);
-        // HTC press of any button will lock the device
-        if let Some(ButtonControllerMsg::Triggered(..)) = self.invisible_buttons.event(ctx, event) {
-            return Some(());
+
+        // Only care about button and loader events when there is a possibility of
+        // locking the device
+        if let Some(self_loader) = &mut self.loader {
+            // When loader has completely grown, we can lock the device
+            if let Some(LoaderMsg::GrownCompletely) = self_loader.event(ctx, event) {
+                return Some(());
+            }
+
+            // Longer hold of any button will lock the device.
+            // Normal/quick presses and releases will show/hide the loader.
+            let button_event = self.invisible_buttons.event(ctx, event);
+            if let Some(ButtonControllerMsg::Pressed(..)) = button_event {
+                if !self.show_loader {
+                    self.show_loader = true;
+                    self_loader.mutate(ctx, |ctx, loader| {
+                        loader.start(ctx);
+                        ctx.request_paint();
+                    });
+                }
+            }
+            if let Some(ButtonControllerMsg::Triggered(..)) = button_event {
+                self.show_loader = false;
+                self_loader.mutate(ctx, |ctx, loader| {
+                    loader.stop(ctx);
+                    ctx.request_paint();
+                });
+            }
         }
+
         None
     }
 
     fn paint(&mut self) {
-        // Painting the homescreen image first, as the notification and label
-        // should be "on top of it"
-        self.paint_homescreen_image();
-        self.paint_notification();
-        self.paint_label();
+        // Redraw the whole screen when the screen changes (loader vs homescreen)
+        if self.show_loader {
+            if !matches!(self.current_screen, CurrentScreen::Loader) {
+                display::clear();
+                self.current_screen = CurrentScreen::Loader;
+            }
+            self.loader.paint();
+        } else {
+            if !matches!(self.current_screen, CurrentScreen::Homescreen) {
+                display::clear();
+                self.current_screen = CurrentScreen::Homescreen;
+            }
+            // Painting the homescreen image first, as the notification and label
+            // should be "on top of it"
+            self.paint_homescreen_image();
+            self.paint_notification();
+            self.paint_label();
+        }
     }
 }
 
@@ -174,9 +243,9 @@ where
     T: StringType,
 {
     label: Child<Label<T>>,
-    instruction: Child<Label<T>>,
+    instruction: Child<Label<StrBuffer>>,
     /// Used for unlocking the device from lockscreen
-    invisible_buttons: Child<ButtonController<T>>,
+    invisible_buttons: Child<ButtonController>,
     /// Display coinjoin icon?
     coinjoin_icon: Option<Icon>,
     /// Screensaver mode (keep screen black)
@@ -187,22 +256,25 @@ impl<T> Lockscreen<T>
 where
     T: StringType + Clone,
 {
-    pub fn new(label: T, bootscreen: bool, coinjoin_authorized: bool) -> Self {
+    pub fn new(label: T, bootscreen: bool, coinjoin_authorized: bool) -> Result<Self, Error> {
         // Buttons will not be visible, we only need all three of them to be present,
         // so that even middle-click triggers the event.
         let invisible_btn_layout = ButtonLayout::arrow_armed_arrow("".into());
         let instruction_str = if bootscreen {
-            "Click to Connect"
+            TR::homescreen__click_to_connect
         } else {
-            "Click to Unlock"
+            TR::homescreen__click_to_unlock
         };
-        Lockscreen {
+        Ok(Lockscreen {
             label: Child::new(Label::centered(label, theme::TEXT_BIG)),
-            instruction: Child::new(Label::centered(instruction_str.into(), theme::TEXT_NORMAL)),
+            instruction: Child::new(Label::centered(
+                instruction_str.try_into()?,
+                theme::TEXT_NORMAL,
+            )),
             invisible_buttons: Child::new(ButtonController::new(invisible_btn_layout)),
             coinjoin_icon: coinjoin_authorized.then_some(theme::ICON_COINJOIN),
             screensaver: !bootscreen,
-        }
+        })
     }
 }
 
@@ -256,7 +328,7 @@ where
 {
     title: Child<Label<T>>,
     buffer_func: F,
-    buttons: Child<ButtonController<T>>,
+    buttons: Child<ButtonController>,
 }
 
 impl<T, F> ConfirmHomescreen<T, F>
@@ -264,7 +336,7 @@ where
     T: StringType + Clone,
 {
     pub fn new(title: T, buffer_func: F) -> Self {
-        let btn_layout = ButtonLayout::cancel_none_text("CHANGE".into());
+        let btn_layout = ButtonLayout::cancel_none_text(TR::buttons__change.into());
         ConfirmHomescreen {
             title: Child::new(Label::centered(title, theme::TEXT_BOLD)),
             buffer_func,

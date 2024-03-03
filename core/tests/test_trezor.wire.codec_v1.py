@@ -1,5 +1,5 @@
-from common import *
-from ubinascii import unhexlify
+from common import *  # isort:skip
+
 import ustruct
 
 from trezor import io

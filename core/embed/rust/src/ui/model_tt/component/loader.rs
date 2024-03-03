@@ -1,3 +1,5 @@
+#[cfg(feature = "haptic")]
+use crate::trezorhal::haptic::{play, HapticEffect};
 use crate::{
     time::{Duration, Instant},
     ui::{
@@ -32,6 +34,7 @@ pub struct Loader {
     growing_duration: Duration,
     shrinking_duration: Duration,
     styles: LoaderStyleSheet,
+    offset_y: i16,
 }
 
 impl Loader {
@@ -39,12 +42,22 @@ impl Loader {
 
     pub fn new() -> Self {
         let styles = theme::loader_default();
+        Self::with_styles(styles)
+    }
+
+    pub fn with_lock_icon() -> Self {
+        let styles = theme::loader_lock_icon();
+        Self::with_styles(styles)
+    }
+
+    pub fn with_styles(styles: LoaderStyleSheet) -> Self {
         Self {
             pad: Pad::with_background(styles.normal.background_color),
             state: State::Initial,
             growing_duration: Duration::from_millis(GROWING_DURATION_MS),
             shrinking_duration: Duration::from_millis(SHRINKING_DURATION_MS),
             styles,
+            offset_y: 0,
         }
     }
 
@@ -131,7 +144,15 @@ impl Component for Loader {
     type Msg = LoaderMsg;
 
     fn place(&mut self, bounds: Rect) -> Rect {
-        self.pad.place(bounds);
+        // Current loader API only takes Y-offset relative to screen center, which we
+        // compute from the bounds center point.
+        let screen_center = constant::screen().center();
+        self.offset_y = bounds.center().y - screen_center.y;
+
+        // FIXME: avoid umlauts rendering outside bounds
+        let mut bounds_up_to_top = bounds;
+        bounds_up_to_top.y0 = 0;
+        self.pad.place(bounds_up_to_top);
         Rect::from_center_and_size(bounds.center(), Self::SIZE)
     }
 
@@ -146,6 +167,8 @@ impl Component for Loader {
                 }
 
                 if self.is_completely_grown(now) {
+                    #[cfg(feature = "haptic")]
+                    play(HapticEffect::HoldToConfirm);
                     return Some(LoaderMsg::GrownCompletely);
                 } else if self.is_completely_shrunk(now) {
                     return Some(LoaderMsg::ShrunkCompletely);
@@ -173,15 +196,10 @@ impl Component for Loader {
                 self.styles.active
             };
 
-            // Current loader API only takes Y-offset relative to screen center, which we
-            // compute from the bounds center point.
-            let screen_center = constant::screen().center();
-            let offset_y = self.pad.area.center().y - screen_center.y;
-
             self.pad.paint();
             display::loader(
                 progress,
-                offset_y,
+                self.offset_y,
                 style.loader_color,
                 style.background_color,
                 style.icon,

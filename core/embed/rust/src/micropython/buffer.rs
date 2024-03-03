@@ -24,7 +24,7 @@ use super::ffi;
 /// The `off` field represents offset from the `ptr` and allows us to do
 /// substring slices while keeping the head pointer as required by GC.
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct StrBuffer {
     ptr: *const u8,
     len: u16,
@@ -196,6 +196,8 @@ fn get_buffer_info(obj: Obj, flags: u32) -> Result<ffi::mp_buffer_info_t, Error>
 /// (a) no mutable reference to the same buffer is held at the same time,
 /// (b) the buffer is not modified in MicroPython while the reference to it is
 /// being held.
+/// The returned value is NOT guaranteed to be a head pointer, so the
+/// destination might get GC'd. Do not store the reference.
 pub unsafe fn get_buffer<'a>(obj: Obj) -> Result<&'a [u8], Error> {
     let bufinfo = get_buffer_info(obj, ffi::MP_BUFFER_READ)?;
 
@@ -221,6 +223,8 @@ pub unsafe fn get_buffer<'a>(obj: Obj) -> Result<&'a [u8], Error> {
 /// (a) no other reference to the same buffer is held at the same time,
 /// (b) the buffer is not modified in MicroPython while the reference to it is
 /// being held.
+/// The returned value is NOT guaranteed to be a head pointer, so the
+/// destination might get GC'd. Do not store the reference.
 pub unsafe fn get_buffer_mut<'a>(obj: Obj) -> Result<&'a mut [u8], Error> {
     let bufinfo = get_buffer_info(obj, ffi::MP_BUFFER_WRITE)?;
 

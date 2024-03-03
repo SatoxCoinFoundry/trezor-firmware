@@ -1,44 +1,43 @@
+use heapless::String;
+use num_traits::ToPrimitive;
+
 use crate::{
     strutil::hexlify,
-    trezorhal::io::io_touch_read,
+    trezorhal::{io::io_touch_read, secbool::secbool},
     ui::{
-        component::{Component, Event, EventCtx, Label, Never},
+        component::{connect::Connect, Component, Event, EventCtx, Label, Never},
         constant::{screen, HEIGHT},
         display::{self, Color, Font, Icon},
         event::TouchEvent,
         geometry::Point,
-        model_tt::{
-            bootloader::{connect::Connect, welcome::Welcome},
-            component::{
-                bl_confirm::{Confirm, ConfirmTitle},
-                Button, ResultScreen, WelcomeScreen,
-            },
-            constant,
-            theme::{
-                bootloader::{
-                    button_bld, button_bld_menu, button_confirm, button_wipe_cancel,
-                    button_wipe_confirm, BLD_BG, BLD_FG, BLD_WIPE_COLOR, CHECK24, CHECK40,
-                    DOWNLOAD32, FIRE32, FIRE40, RESULT_FW_INSTALL, RESULT_INITIAL, RESULT_WIPE,
-                    TEXT_BOLD, TEXT_NORMAL, TEXT_WIPE_BOLD, TEXT_WIPE_NORMAL, WARNING40,
-                    WELCOME_COLOR, X24,
-                },
-                BACKLIGHT_DIM, BACKLIGHT_NORMAL, FG, WHITE,
-            },
-        },
         util::{from_c_array, from_c_str},
     },
 };
-use heapless::String;
-use num_traits::ToPrimitive;
 
-mod connect;
+use super::{
+    bootloader::welcome::Welcome,
+    component::{
+        bl_confirm::{Confirm, ConfirmTitle},
+        Button, ResultScreen, WelcomeScreen,
+    },
+    constant,
+    theme::{
+        bootloader::{
+            button_bld, button_bld_menu, button_confirm, button_wipe_cancel, button_wipe_confirm,
+            BLD_BG, BLD_FG, BLD_TITLE_COLOR, BLD_WIPE_COLOR, CHECK24, CHECK40, DOWNLOAD32, FIRE32,
+            FIRE40, RESULT_FW_INSTALL, RESULT_INITIAL, RESULT_WIPE, TEXT_BOLD, TEXT_NORMAL,
+            TEXT_WIPE_BOLD, TEXT_WIPE_NORMAL, WARNING40, WELCOME_COLOR, X24,
+        },
+        BACKLIGHT_DIM, BACKLIGHT_NORMAL, BLACK, FG, WHITE,
+    },
+};
+
+use intro::Intro;
+use menu::Menu;
+
 pub mod intro;
 pub mod menu;
 pub mod welcome;
-
-use crate::{trezorhal::secbool::secbool, ui::model_tt::theme::BLACK};
-use intro::Intro;
-use menu::Menu;
 
 pub type BootloaderString = String<128>;
 
@@ -262,11 +261,10 @@ fn screen_progress(
         bg_color,
     );
     display::loader(progress, -20, fg_color, bg_color, icon);
+    display::refresh();
     if initialize {
         fadein();
     }
-
-    display::refresh();
 }
 
 #[no_mangle]
@@ -299,7 +297,7 @@ extern "C" fn screen_wipe_progress(progress: u16, initialize: bool) {
 #[no_mangle]
 extern "C" fn screen_connect(initial_setup: bool) {
     let bg = if initial_setup { WELCOME_COLOR } else { BLD_BG };
-    let mut frame = Connect::new("Waiting for host...", bg);
+    let mut frame = Connect::new("Waiting for host...", BLD_TITLE_COLOR, bg);
     show(&mut frame, true);
 }
 

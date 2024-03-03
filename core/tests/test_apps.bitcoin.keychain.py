@@ -1,8 +1,8 @@
-from common import *
+from common import *  # isort:skip
+
 from storage import cache
 from trezor import wire
 from trezor.crypto import bip39
-from apps.common.paths import HARDENED
 
 from apps.bitcoin.keychain import _get_coin_by_name, _get_keychain_for_coin
 
@@ -149,7 +149,6 @@ class TestAltcoinKeychains(unittest.TestCase):
             [H_(45), 99, 1, 1000],
             [H_(49), H_(0), H_(0), 0, 0],
             [H_(84), H_(0), H_(0), 0, 0],
-
             [44, 2, 0, 0, 0],
             [H_(44), H_(2), H_(0)],
             [H_(44), H_(2), H_(0), 0, 0, 0],

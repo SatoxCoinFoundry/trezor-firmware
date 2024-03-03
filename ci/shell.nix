@@ -97,6 +97,7 @@ stdenvNoCC.mkDerivation ({
     bash
     bloaty  # for binsize
     check
+    crowdin-cli  # for translations
     curl  # for connect tests
     editorconfig-checker
     gcc-arm-embedded
@@ -136,7 +137,8 @@ stdenvNoCC.mkDerivation ({
     libiconv
   ] ++ lib.optionals hardwareTest [
     uhubctl
-    ffmpeg
+    tio
+    ffmpeg_5-full
     dejavu_fonts
   ] ++ lib.optionals devTools [
     shellcheck

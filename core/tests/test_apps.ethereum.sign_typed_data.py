@@ -1,25 +1,21 @@
-from common import *
+from common import *  # isort:skip
 
 from trezor import wire
-from trezor.wire import context
-from trezor.messages import EthereumTypedDataStructAck as ETDSA
-from trezor.messages import EthereumStructMember as ESM
-from trezor.messages import EthereumFieldType as EFT
-from trezor.messages import EthereumTypedDataValueAck
 from trezor.enums import EthereumDataType as EDT
-
+from trezor.messages import EthereumFieldType as EFT
+from trezor.messages import EthereumStructMember as ESM
+from trezor.messages import EthereumTypedDataStructAck as ETDSA
+from trezor.messages import EthereumTypedDataValueAck
+from trezor.wire import context
 
 if not utils.BITCOIN_ONLY:
+    from apps.ethereum.helpers import decode_typed_data, get_type_name
     from apps.ethereum.sign_typed_data import (
-        encode_field,
-        _validate_value,
-        validate_field_type,
-        keccak256,
         TypedDataEnvelope,
-    )
-    from apps.ethereum.helpers import (
-        get_type_name,
-        decode_typed_data,
+        _validate_value,
+        encode_field,
+        keccak256,
+        validate_field_type,
     )
 
 
@@ -538,16 +534,13 @@ class TestEthereumSignTypedData(unittest.TestCase):
         )
 
         for field, value, expected in VECTORS:
-            # metamask_v4_compat should not have any effect on the
-            # result for items outside of arrays
-            for metamask_v4_compat in [True, False]:
-                w = bytearray()
-                encode_field(
-                    w=w,
-                    field=field,
-                    value=value,
-                )
-                self.assertEqual(w, expected)
+            w = bytearray()
+            encode_field(
+                w=w,
+                field=field,
+                value=value,
+            )
+            self.assertEqual(w, expected)
 
     def test_validate_value(self):
         VECTORS_VALID_INVALID = (  # field, valid_values, invalid_values

@@ -75,6 +75,9 @@ class MessageType(IntEnum):
     UnlockBootloader = 96
     AuthenticateDevice = 97
     AuthenticityProof = 98
+    ChangeLanguage = 990
+    TranslationDataRequest = 991
+    TranslationDataAck = 992
     SetU2FCounter = 63
     GetNextU2FCounter = 80
     NextU2FCounter = 81
@@ -83,7 +86,7 @@ class MessageType(IntEnum):
     FirmwareErase = 6
     FirmwareUpload = 7
     FirmwareRequest = 8
-    SelfTest = 32
+    ProdTestT1 = 32
     GetPublicKey = 11
     PublicKey = 12
     SignTx = 15
@@ -474,6 +477,7 @@ class Capability(IntEnum):
     ShamirGroups = 16
     PassphraseEntry = 17
     Solana = 18
+    Translations = 19
 
 
 class SdProtectOperationType(IntEnum):
@@ -1043,6 +1047,7 @@ class PublicKey(protobuf.MessageType):
         1: protobuf.Field("node", "HDNodeType", repeated=False, required=True),
         2: protobuf.Field("xpub", "string", repeated=False, required=True),
         3: protobuf.Field("root_fingerprint", "uint32", repeated=False, required=False, default=None),
+        4: protobuf.Field("descriptor", "string", repeated=False, required=False, default=None),
     }
 
     def __init__(
@@ -1051,10 +1056,12 @@ class PublicKey(protobuf.MessageType):
         node: "HDNodeType",
         xpub: "str",
         root_fingerprint: Optional["int"] = None,
+        descriptor: Optional["str"] = None,
     ) -> None:
         self.node = node
         self.xpub = xpub
         self.root_fingerprint = root_fingerprint
+        self.descriptor = descriptor
 
 
 class GetAddress(protobuf.MessageType):
@@ -2134,7 +2141,7 @@ class FirmwareUpload(protobuf.MessageType):
         self.hash = hash
 
 
-class SelfTest(protobuf.MessageType):
+class ProdTestT1(protobuf.MessageType):
     MESSAGE_WIRE_TYPE = 32
     FIELDS = {
         1: protobuf.Field("payload", "bytes", repeated=False, required=False, default=None),
@@ -3210,6 +3217,7 @@ class Features(protobuf.MessageType):
         47: protobuf.Field("homescreen_width", "uint32", repeated=False, required=False, default=None),
         48: protobuf.Field("homescreen_height", "uint32", repeated=False, required=False, default=None),
         49: protobuf.Field("bootloader_locked", "bool", repeated=False, required=False, default=None),
+        50: protobuf.Field("language_version_matches", "bool", repeated=False, required=False, default=True),
     }
 
     def __init__(
@@ -3262,6 +3270,7 @@ class Features(protobuf.MessageType):
         homescreen_width: Optional["int"] = None,
         homescreen_height: Optional["int"] = None,
         bootloader_locked: Optional["bool"] = None,
+        language_version_matches: Optional["bool"] = True,
     ) -> None:
         self.capabilities: Sequence["Capability"] = capabilities if capabilities is not None else []
         self.major_version = major_version
@@ -3310,6 +3319,7 @@ class Features(protobuf.MessageType):
         self.homescreen_width = homescreen_width
         self.homescreen_height = homescreen_height
         self.bootloader_locked = bootloader_locked
+        self.language_version_matches = language_version_matches
 
 
 class LockDevice(protobuf.MessageType):
@@ -3376,6 +3386,54 @@ class ApplySettings(protobuf.MessageType):
         self.safety_checks = safety_checks
         self.experimental_features = experimental_features
         self.hide_passphrase_from_host = hide_passphrase_from_host
+
+
+class ChangeLanguage(protobuf.MessageType):
+    MESSAGE_WIRE_TYPE = 990
+    FIELDS = {
+        1: protobuf.Field("data_length", "uint32", repeated=False, required=True),
+        2: protobuf.Field("show_display", "bool", repeated=False, required=False, default=None),
+    }
+
+    def __init__(
+        self,
+        *,
+        data_length: "int",
+        show_display: Optional["bool"] = None,
+    ) -> None:
+        self.data_length = data_length
+        self.show_display = show_display
+
+
+class TranslationDataRequest(protobuf.MessageType):
+    MESSAGE_WIRE_TYPE = 991
+    FIELDS = {
+        1: protobuf.Field("data_length", "uint32", repeated=False, required=True),
+        2: protobuf.Field("data_offset", "uint32", repeated=False, required=True),
+    }
+
+    def __init__(
+        self,
+        *,
+        data_length: "int",
+        data_offset: "int",
+    ) -> None:
+        self.data_length = data_length
+        self.data_offset = data_offset
+
+
+class TranslationDataAck(protobuf.MessageType):
+    MESSAGE_WIRE_TYPE = 992
+    FIELDS = {
+        1: protobuf.Field("data_chunk", "bytes", repeated=False, required=True),
+    }
+
+    def __init__(
+        self,
+        *,
+        data_chunk: "bytes",
+    ) -> None:
+        self.data_chunk = data_chunk
 
 
 class ApplyFlags(protobuf.MessageType):
@@ -3552,7 +3610,7 @@ class LoadDevice(protobuf.MessageType):
         1: protobuf.Field("mnemonics", "string", repeated=True, required=False, default=None),
         3: protobuf.Field("pin", "string", repeated=False, required=False, default=None),
         4: protobuf.Field("passphrase_protection", "bool", repeated=False, required=False, default=None),
-        5: protobuf.Field("language", "string", repeated=False, required=False, default='en-US'),
+        5: protobuf.Field("language", "string", repeated=False, required=False, default=None),
         6: protobuf.Field("label", "string", repeated=False, required=False, default=None),
         7: protobuf.Field("skip_checksum", "bool", repeated=False, required=False, default=None),
         8: protobuf.Field("u2f_counter", "uint32", repeated=False, required=False, default=None),
@@ -3566,7 +3624,7 @@ class LoadDevice(protobuf.MessageType):
         mnemonics: Optional[Sequence["str"]] = None,
         pin: Optional["str"] = None,
         passphrase_protection: Optional["bool"] = None,
-        language: Optional["str"] = 'en-US',
+        language: Optional["str"] = None,
         label: Optional["str"] = None,
         skip_checksum: Optional["bool"] = None,
         u2f_counter: Optional["int"] = None,
@@ -3591,7 +3649,7 @@ class ResetDevice(protobuf.MessageType):
         2: protobuf.Field("strength", "uint32", repeated=False, required=False, default=256),
         3: protobuf.Field("passphrase_protection", "bool", repeated=False, required=False, default=None),
         4: protobuf.Field("pin_protection", "bool", repeated=False, required=False, default=None),
-        5: protobuf.Field("language", "string", repeated=False, required=False, default='en-US'),
+        5: protobuf.Field("language", "string", repeated=False, required=False, default=None),
         6: protobuf.Field("label", "string", repeated=False, required=False, default=None),
         7: protobuf.Field("u2f_counter", "uint32", repeated=False, required=False, default=None),
         8: protobuf.Field("skip_backup", "bool", repeated=False, required=False, default=None),
@@ -3606,7 +3664,7 @@ class ResetDevice(protobuf.MessageType):
         strength: Optional["int"] = 256,
         passphrase_protection: Optional["bool"] = None,
         pin_protection: Optional["bool"] = None,
-        language: Optional["str"] = 'en-US',
+        language: Optional["str"] = None,
         label: Optional["str"] = None,
         u2f_counter: Optional["int"] = None,
         skip_backup: Optional["bool"] = None,
@@ -3762,6 +3820,7 @@ class RebootToBootloader(protobuf.MessageType):
     FIELDS = {
         1: protobuf.Field("boot_command", "BootCommand", repeated=False, required=False, default=BootCommand.STOP_AND_WAIT),
         2: protobuf.Field("firmware_header", "bytes", repeated=False, required=False, default=None),
+        3: protobuf.Field("language_data_length", "uint32", repeated=False, required=False, default=0),
     }
 
     def __init__(
@@ -3769,9 +3828,11 @@ class RebootToBootloader(protobuf.MessageType):
         *,
         boot_command: Optional["BootCommand"] = BootCommand.STOP_AND_WAIT,
         firmware_header: Optional["bytes"] = None,
+        language_data_length: Optional["int"] = 0,
     ) -> None:
         self.boot_command = boot_command
         self.firmware_header = firmware_header
+        self.language_data_length = language_data_length
 
 
 class GetNonce(protobuf.MessageType):

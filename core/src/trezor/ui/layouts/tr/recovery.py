@@ -1,6 +1,7 @@
 from typing import Callable, Iterable
 
 import trezorui2
+from trezor import TR
 from trezor.enums import ButtonRequestType
 
 from ..common import interact
@@ -17,15 +18,27 @@ async def request_word_count(dry_run: bool) -> int:
     return int(count)
 
 
-async def request_word(word_index: int, word_count: int, is_slip39: bool) -> str:
+async def request_word(
+    word_index: int, word_count: int, is_slip39: bool, prefill_word: str = ""
+) -> str:
     from trezor.wire.context import wait
 
-    prompt = f"WORD {word_index + 1} OF {word_count}"
+    prompt = TR.recovery__word_x_of_y_template.format(word_index + 1, word_count)
+
+    can_go_back = word_index > 0
 
     if is_slip39:
-        word_choice = RustLayout(trezorui2.request_slip39(prompt=prompt))
+        word_choice = RustLayout(
+            trezorui2.request_slip39(
+                prompt=prompt, prefill_word=prefill_word, can_go_back=can_go_back
+            )
+        )
     else:
-        word_choice = RustLayout(trezorui2.request_bip39(prompt=prompt))
+        word_choice = RustLayout(
+            trezorui2.request_bip39(
+                prompt=prompt, prefill_word=prefill_word, can_go_back=can_go_back
+            )
+        )
 
     word: str = await wait(word_choice)
     return word
@@ -45,10 +58,10 @@ async def show_group_share_success(share_index: int, group_index: int) -> None:
             RustLayout(
                 trezorui2.show_group_share_success(
                     lines=[
-                        "You have entered",
-                        f"Share {share_index + 1}",
-                        "from",
-                        f"Group {group_index + 1}",
+                        TR.recovery__you_have_entered,
+                        TR.recovery__share_num_template.format(share_index + 1),
+                        TR.words__from,
+                        TR.recovery__group_num_template.format(group_index + 1),
                     ],
                 )
             ),
@@ -99,7 +112,8 @@ async def show_recovery_warning(
     br_type: str,
     content: str,
     subheader: str | None = None,
-    button: str = "TRY AGAIN",
+    button: str | None = None,
     br_code: ButtonRequestType = ButtonRequestType.Warning,
 ) -> None:
+    button = button or TR.buttons__try_again  # def_arg
     await show_warning(br_type, content, subheader, button, br_code)

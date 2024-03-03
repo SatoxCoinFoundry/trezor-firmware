@@ -19,14 +19,6 @@ pub struct FrameBuffer(*mut u16);
 #[derive(Copy, Clone)]
 pub struct FrameBuffer(*mut u32);
 
-#[derive(PartialEq, Debug, Eq, FromPrimitive, Clone, Copy)]
-pub enum ToifFormat {
-    FullColorBE = ffi::toif_format_t_TOIF_FULL_COLOR_BE as _,
-    GrayScaleOH = ffi::toif_format_t_TOIF_GRAYSCALE_OH as _,
-    FullColorLE = ffi::toif_format_t_TOIF_FULL_COLOR_LE as _,
-    GrayScaleEH = ffi::toif_format_t_TOIF_GRAYSCALE_EH as _,
-}
-
 pub fn backlight(val: i32) -> i32 {
     unsafe { ffi::display_backlight(val) }
 }
@@ -59,7 +51,7 @@ pub fn text_into_buffer(text: &str, font: i32, buffer: &mut BufferText, x_offset
 
 pub fn text_width(text: &str, font: i32) -> i16 {
     unsafe {
-        ffi::display_text_width(text.as_ptr() as _, text.len() as _, font)
+        ffi::font_text_width(font, text.as_ptr() as _, text.len() as _)
             .try_into()
             .unwrap_or(i16::MAX)
     }
@@ -71,7 +63,7 @@ pub fn char_width(ch: char, font: i32) -> i16 {
     text_width(encoding, font)
 }
 
-pub fn get_char_glyph(ch: u8, font: i32) -> *const u8 {
+pub fn get_char_glyph(ch: u16, font: i32) -> *const u8 {
     unsafe { ffi::font_get_glyph(font, ch) }
 }
 
@@ -88,7 +80,11 @@ pub fn text_baseline(font: i32) -> i16 {
 }
 
 #[inline(always)]
-#[cfg(all(feature = "disp_i8080_16bit_dw", not(feature = "disp_i8080_8bit_dw")))]
+#[cfg(all(
+    not(feature = "framebuffer"),
+    feature = "disp_i8080_16bit_dw",
+    not(feature = "disp_i8080_8bit_dw")
+))]
 pub fn pixeldata(c: u16) {
     unsafe {
         ffi::DISPLAY_DATA_ADDRESS.write_volatile(c);
@@ -101,7 +97,7 @@ pub fn get_fb_addr() -> FrameBuffer {
 }
 
 #[inline(always)]
-#[cfg(feature = "disp_i8080_8bit_dw")]
+#[cfg(all(not(feature = "framebuffer"), feature = "disp_i8080_8bit_dw"))]
 pub fn pixeldata(c: u16) {
     unsafe {
         ffi::DISPLAY_DATA_ADDRESS.write_volatile((c & 0xff) as u8);
@@ -134,7 +130,10 @@ pub fn pixel(fb: FrameBuffer, x: i16, y: i16, c: u32) {
 }
 
 #[inline(always)]
-#[cfg(not(any(feature = "disp_i8080_16bit_dw", feature = "disp_i8080_8bit_dw")))]
+#[cfg(any(
+    feature = "framebuffer",
+    not(any(feature = "disp_i8080_16bit_dw", feature = "disp_i8080_8bit_dw"))
+))]
 pub fn pixeldata(c: u16) {
     unsafe {
         ffi::display_pixeldata(c);

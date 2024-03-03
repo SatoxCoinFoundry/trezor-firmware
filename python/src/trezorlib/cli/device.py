@@ -52,16 +52,6 @@ def cli() -> None:
 
 
 @cli.command()
-@with_client
-def self_test(client: "TrezorClient") -> str:
-    """Perform a factory self-test.
-
-    Only available on PRODTEST firmware.
-    """
-    return debuglink.self_test(client)
-
-
-@cli.command()
 @click.option(
     "-b",
     "--bootloader",
@@ -137,7 +127,6 @@ def load(
             pin=pin,
             passphrase_protection=passphrase_protection,
             label=label,
-            language="en-US",
             skip_checksum=ignore_checksum,
             needs_backup=needs_backup,
             no_backup=no_backup,
@@ -188,7 +177,6 @@ def recover(
         pin_protection=pin_protection,
         label=label,
         u2f_counter=u2f_counter,
-        language="en-US",
         input_callback=input_callback,
         type=rec_type,
         dry_run=dry_run,
@@ -241,7 +229,6 @@ def setup(
         passphrase_protection=passphrase_protection,
         pin_protection=pin_protection,
         label=label,
-        language="en-US",
         u2f_counter=u2f_counter,
         skip_backup=skip_backup,
         no_backup=no_backup,

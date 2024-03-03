@@ -1,6 +1,8 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from trezor.crypto import bip32
+    from trezor.enums import InputScriptType
     from trezor.messages import GetPublicKey, PublicKey
     from trezor.protobuf import MessageType
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 async def get_public_key(
     msg: GetPublicKey, auth_msg: MessageType | None = None
 ) -> PublicKey:
-    from trezor import wire
+    from trezor import TR, wire
     from trezor.enums import InputScriptType
     from trezor.messages import HDNodeType, PublicKey, UnlockPath
 
@@ -77,6 +79,9 @@ async def get_public_key(
         chain_code=node.chain_code(),
         public_key=pubkey,
     )
+    descriptor = _xpub_descriptor(
+        node, xpub_magic, address_n, script_type, keychain.root_fingerprint()
+    )
 
     if msg.show_display:
         from trezor.ui.layouts import confirm_path_warning, show_pubkey
@@ -96,12 +101,15 @@ async def get_public_key(
             account = coin.coin_shortcut
         else:
             account = f"{coin.coin_shortcut} {account_name}"
+        show_xpub = node_xpub
+        if script_type == InputScriptType.SPENDTAPROOT and descriptor is not None:
+            show_xpub = descriptor
         await show_pubkey(
-            node_xpub,
+            show_xpub,
             "XPUB",
             account=account,
             path=path,
-            mismatch_title="XPUB mismatch?",
+            mismatch_title=TR.addr_mismatch__xpub_mismatch,
             br_type="show_xpub",
         )
 
@@ -109,4 +117,39 @@ async def get_public_key(
         node=node_type,
         xpub=node_xpub,
         root_fingerprint=keychain.root_fingerprint(),
+        descriptor=descriptor,
     )
+
+
+def _xpub_descriptor(
+    node: bip32.HDNode,
+    xpub_magic: int,
+    address_n: list[int],
+    script_type: InputScriptType,
+    fingerprint: int,
+) -> str | None:
+    from trezor.enums import InputScriptType
+
+    from apps.common import paths
+
+    from .common import descriptor_checksum
+
+    if script_type == InputScriptType.SPENDADDRESS:
+        fmt = "pkh({})"
+    elif script_type == InputScriptType.SPENDP2SHWITNESS:
+        fmt = "sh(wpkh({}))"
+    elif script_type == InputScriptType.SPENDWITNESS:
+        fmt = "wpkh({})"
+    elif script_type == InputScriptType.SPENDTAPROOT:
+        fmt = "tr({})"
+    else:
+        return None
+
+    # always ignore script-dependent xpub magic for descriptors
+    xpub = node.serialize_public(xpub_magic)
+
+    path = paths.address_n_to_str(address_n).replace("'", "h")
+    inner = f"[{fingerprint:08x}{path[1:]}]{xpub}/<0;1>/*"
+    descriptor = fmt.format(inner)
+    checksum = descriptor_checksum(descriptor)
+    return f"{descriptor}#{checksum}"

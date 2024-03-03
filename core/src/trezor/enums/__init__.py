@@ -67,6 +67,9 @@ if TYPE_CHECKING:
         UnlockBootloader = 96
         AuthenticateDevice = 97
         AuthenticityProof = 98
+        ChangeLanguage = 990
+        TranslationDataRequest = 991
+        TranslationDataAck = 992
         SetU2FCounter = 63
         GetNextU2FCounter = 80
         NextU2FCounter = 81
@@ -75,7 +78,7 @@ if TYPE_CHECKING:
         FirmwareErase = 6
         FirmwareUpload = 7
         FirmwareRequest = 8
-        SelfTest = 32
+        ProdTestT1 = 32
         GetPublicKey = 11
         PublicKey = 12
         SignTx = 15
@@ -443,6 +446,7 @@ if TYPE_CHECKING:
         ShamirGroups = 16
         PassphraseEntry = 17
         Solana = 18
+        Translations = 19
 
     class SdProtectOperationType(IntEnum):
         DISABLE = 0

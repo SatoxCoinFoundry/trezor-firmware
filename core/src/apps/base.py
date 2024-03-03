@@ -2,9 +2,10 @@ from typing import TYPE_CHECKING
 
 import storage.cache as storage_cache
 import storage.device as storage_device
-from trezor import config, utils, wire, workflow
+from trezor import TR, config, utils, wire, workflow
 from trezor.enums import HomescreenFormat, MessageType
 from trezor.messages import Success, UnlockPath
+from trezor.ui.layouts import confirm_action
 
 from . import workflow_handlers
 
@@ -42,21 +43,39 @@ def busy_expiry_ms() -> int:
     return expiry_ms if expiry_ms > 0 else 0
 
 
+def _language_version_matches() -> bool | None:
+    """
+    Whether translation blob version matches firmware version.
+    Returns None if there is no blob.
+    """
+    from trezor import translations
+
+    header = translations.TranslationsHeader.load_from_flash()
+    if header is None:
+        return True
+
+    return header.version == utils.VERSION
+
+
 def get_features() -> Features:
     import storage.recovery as storage_recovery
+    from trezor import translations
     from trezor.enums import Capability
     from trezor.messages import Features
     from trezor.ui import HEIGHT, WIDTH
 
     from apps.common import mnemonic, safety_checks
 
+    v_major, v_minor, v_patch, _v_build = utils.VERSION
+
     f = Features(
         vendor="trezor.io",
         fw_vendor=utils.firmware_vendor(),
-        language="en-US",
-        major_version=utils.VERSION_MAJOR,
-        minor_version=utils.VERSION_MINOR,
-        patch_version=utils.VERSION_PATCH,
+        language=translations.get_language(),
+        language_version_matches=_language_version_matches(),
+        major_version=v_major,
+        minor_version=v_minor,
+        patch_version=v_patch,
         revision=utils.SCM_REVISION,
         model=utils.MODEL,
         internal_model=utils.INTERNAL_MODEL,
@@ -84,6 +103,7 @@ def get_features() -> Features:
             Capability.Shamir,
             Capability.ShamirGroups,
             Capability.PassphraseEntry,
+            Capability.Translations,
         ]
     else:
         f.capabilities = [
@@ -102,6 +122,7 @@ def get_features() -> Features:
             Capability.ShamirGroups,
             Capability.PassphraseEntry,
             Capability.Solana,
+            Capability.Translations,
         ]
 
         # We do not support some currencies on T2B1
@@ -221,7 +242,7 @@ async def handle_Ping(msg: Ping) -> Success:
         from trezor.enums import ButtonRequestType as B
         from trezor.ui.layouts import confirm_action
 
-        await confirm_action("ping", "Confirm", "ping", br_code=B.ProtectCall)
+        await confirm_action("ping", TR.words__confirm, "ping", br_code=B.ProtectCall)
     return Success(message=msg.message)
 
 
@@ -252,7 +273,6 @@ async def handle_DoPreauthorized(msg: DoPreauthorized) -> protobuf.MessageType:
 async def handle_UnlockPath(msg: UnlockPath) -> protobuf.MessageType:
     from trezor.crypto import hmac
     from trezor.messages import UnlockedPathRequest
-    from trezor.ui.layouts import confirm_action
     from trezor.wire.context import call_any, get_context
 
     from apps.common.paths import SLIP25_PURPOSE
@@ -285,8 +305,8 @@ async def handle_UnlockPath(msg: UnlockPath) -> protobuf.MessageType:
         await confirm_action(
             "confirm_coinjoin_access",
             title="Coinjoin",
-            description="Access your coinjoin account?",
-            verb="ACCESS",
+            description=TR.coinjoin__access_account,
+            verb=TR.buttons__access,
         )
 
     wire_types = (MessageType.GetAddress, MessageType.GetPublicKey, MessageType.SignTx)

@@ -137,8 +137,9 @@ macro_rules! obj_dict {
 macro_rules! obj_type {
     (name: $name:expr,
      $(locals: $locals:expr,)?
-     $(attr_fn: $attr_fn:ident,)?
-     $(call_fn: $call_fn:ident,)?
+     $(make_new_fn: $make_new_fn:path,)?
+     $(attr_fn: $attr_fn:path,)?
+     $(call_fn: $call_fn:path,)?
     ) => {{
         #[allow(unused_unsafe)]
         unsafe {
@@ -156,6 +157,11 @@ macro_rules! obj_type {
             let mut call: ffi::mp_call_fun_t = None;
             $(call = Some($call_fn);)?
 
+            #[allow(unused_mut)]
+            #[allow(unused_assignments)]
+            let mut make_new: ffi::mp_make_new_fun_t = None;
+            $(make_new = Some($make_new_fn);)?
+
             // TODO: This is safe only if we pass in `Dict` with fixed `Map` (created by
             // `Map::fixed()`, usually through `obj_map!`), because only then will
             // MicroPython treat `locals_dict` as immutable, and make the mutable cast safe.
@@ -171,7 +177,7 @@ macro_rules! obj_type {
                 flags: 0,
                 name,
                 print: None,
-                make_new: None,
+                make_new,
                 call,
                 unary_op: None,
                 binary_op: None,
@@ -219,6 +225,39 @@ macro_rules! obj_module {
     }});
     ($($key:expr => $val:expr),* ,) => ({
         obj_module!($($key => $val),*)
+    });
+}
+
+macro_rules! attr_tuple {
+    (@append
+        fields: [$($fields:expr,)*],
+        values: [$($values:expr,)*],
+        rest: {
+            $field:expr => $val:expr,
+            $($rest:tt)*
+        }
+    ) => {
+        attr_tuple! {
+            @append
+            fields: [$($fields,)* $field,],
+            values: [$($values,)* $val,],
+            rest: {$($rest)*}
+        }
+    };
+    (@append
+        fields: [$($fields:expr,)*],
+        values: [$($values:expr,)*],
+        rest: {}
+    ) => {
+        $crate::micropython::util::new_attrtuple(&[$($fields,)*], &[$($values,)*])
+    };
+    // version without trailing comma
+    ($($key:expr => $val:expr),*) => ({
+        attr_tuple!(@append fields: [], values: [], rest: { $($key => $val,)* })
+    });
+    // version with trailing comma
+    ($($key:expr => $val:expr,)*) => ({
+        attr_tuple!(@append fields: [], values: [], rest: { $($key => $val,)* })
     });
 }
 

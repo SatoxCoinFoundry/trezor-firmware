@@ -34,27 +34,33 @@
 #include "secbool.h"
 #include "touch.h"
 
-static void progress_callback(int pos, int len) { display_printf("."); }
+#ifdef USE_HASH_PROCESSOR
+#include "hash_processor.h"
+#endif
+
+static void progress_callback(int pos, int len) { term_printf("."); }
 
 static void flash_from_sdcard(const flash_area_t* area, uint32_t source,
                               uint32_t length) {
   static uint32_t buf[SDCARD_BLOCK_SIZE / sizeof(uint32_t)];
 
+  _Static_assert(SDCARD_BLOCK_SIZE % FLASH_BLOCK_SIZE == 0);
   ensure(sectrue * (source % SDCARD_BLOCK_SIZE == 0),
          "source not a multiple of block size");
   ensure(sectrue * (length % SDCARD_BLOCK_SIZE == 0),
          "length not a multiple of block size");
 
   for (uint32_t i = 0; i < length / SDCARD_BLOCK_SIZE; i++) {
-    display_printf("read %d\n", (unsigned int)(i + source / SDCARD_BLOCK_SIZE));
+    term_printf("read %d\n", (unsigned int)(i + source / SDCARD_BLOCK_SIZE));
 
     ensure(sdcard_read_blocks(buf, i + source / SDCARD_BLOCK_SIZE, 1),
            "sdcard_read_blocks");
 
-    for (uint32_t j = 0; j < SDCARD_BLOCK_SIZE / (sizeof(uint32_t) * 4); j++) {
-      ensure(flash_area_write_quadword(
-                 area, i * SDCARD_BLOCK_SIZE + j * 4 * sizeof(uint32_t),
-                 &buf[j * 4]),
+    for (uint32_t j = 0; j < SDCARD_BLOCK_SIZE / FLASH_BLOCK_SIZE)
+      ; j++) {
+      ensure(flash_area_write_block(
+                 area, i * SDCARD_BLOCK_SIZE + j * FLASH_BLOCK_SIZE,
+                 &buf[j * FLASH_BLOCK_WORDS]),
              NULL);
     }
   }
@@ -64,21 +70,25 @@ int main(void) {
   sdcard_init();
   touch_init();
 
+#ifdef USE_HASH_PROCESSOR
+  hash_processor_init();
+#endif
+
   display_orientation(0);
   display_clear();
   display_backlight(255);
 
   ensure(sdcard_is_present(), "sdcard_is_present");
 
-  display_printf("updating boardloader + bootloader\n");
+  term_printf("updating boardloader + bootloader\n");
 
-  display_printf("erasing sectors");
+  term_printf("erasing sectors");
   ensure(flash_area_erase(&BOARDLOADER_AREA, progress_callback),
          "flash_erase_sectors");
   ensure(flash_area_erase(&BOOTLOADER_AREA, progress_callback),
          "flash_erase_sectors");
-  display_printf("\n");
-  display_printf("erased\n");
+  term_printf("\n");
+  term_printf("erased\n");
 
   ensure(flash_unlock_write(), NULL);
 
@@ -92,7 +102,7 @@ int main(void) {
   flash_from_sdcard(&BOOTLOADER_AREA, BOARDLOADER_TOTAL_SIZE,
                     BOOTLOADER_TOTAL_SIZE);
 
-  display_printf("done\n");
+  term_printf("done\n");
   sdcard_power_off();
   ensure(flash_lock_write(), NULL);
 

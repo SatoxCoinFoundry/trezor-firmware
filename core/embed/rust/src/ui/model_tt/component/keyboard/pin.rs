@@ -79,8 +79,7 @@ where
         let erase_btn = Maybe::hidden(theme::BG, erase_btn).into_child();
 
         let cancel_btn = Button::with_icon(theme::ICON_CANCEL).styled(theme::button_cancel());
-        let cancel_btn =
-            Maybe::new(Pad::with_background(theme::BG), cancel_btn, allow_cancel).into_child();
+        let cancel_btn = Maybe::new(theme::BG, cancel_btn, allow_cancel).into_child();
 
         Self {
             allow_cancel,
@@ -475,8 +474,8 @@ where
                 unwrap!(digits_order.push_str(text));
             }
         }
-        t.string("digits_order", &digits_order);
-        t.string("pin", self.textbox.inner().pin());
+        t.string("digits_order", digits_order.as_str().into());
+        t.string("pin", self.textbox.inner().pin().into());
         t.bool("display_digits", self.textbox.inner().display_digits);
     }
 }

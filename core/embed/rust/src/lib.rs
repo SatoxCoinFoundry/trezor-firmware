@@ -17,6 +17,10 @@ mod error;
 // use trezorhal for its macros early
 #[macro_use]
 mod trezorhal;
+
+#[cfg(feature = "crypto")]
+mod crypto;
+mod io;
 mod maybe_trace;
 #[cfg(feature = "micropython")]
 #[macro_use]
@@ -27,6 +31,8 @@ mod storage;
 mod time;
 #[cfg(feature = "ui_debug")]
 mod trace;
+#[cfg(feature = "translations")]
+pub mod translations;
 
 #[cfg(feature = "ui")]
 #[macro_use]

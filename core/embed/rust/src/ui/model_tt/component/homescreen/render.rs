@@ -1,4 +1,5 @@
 use crate::{
+    strutil::TString,
     trezorhal::{
         buffers::{
             BufferBlurring, BufferBlurringTotals, BufferJpeg, BufferLine16bpp, BufferLine4bpp,
@@ -24,15 +25,15 @@ use crate::{
 
 #[derive(Clone, Copy)]
 pub struct HomescreenText<'a> {
-    pub text: &'a str,
+    pub text: TString<'a>,
     pub style: TextStyle,
     pub offset: Offset,
     pub icon: Option<Icon>,
 }
 
 #[derive(Clone, Copy)]
-pub struct HomescreenNotification<'a> {
-    pub text: &'a str,
+pub struct HomescreenNotification {
+    pub text: TString<'static>,
     pub icon: Icon,
     pub color: Color,
 }
@@ -49,7 +50,8 @@ pub const HOMESCREEN_IMAGE_WIDTH: i16 = WIDTH;
 pub const HOMESCREEN_IMAGE_HEIGHT: i16 = HEIGHT;
 pub const HOMESCREEN_TOIF_SIZE: i16 = 144;
 pub const HOMESCREEN_TOIF_Y_OFFSET: i16 = 27;
-pub const HOMESCREEN_TOIF_X_OFFSET: usize = ((WIDTH - HOMESCREEN_TOIF_SIZE) / 2) as usize;
+pub const HOMESCREEN_TOIF_X_OFFSET: usize =
+    ((WIDTH.saturating_sub(HOMESCREEN_TOIF_SIZE)) / 2) as usize;
 
 const HOMESCREEN_MAX_ICON_SIZE: i16 = 20;
 const NOTIFICATION_HEIGHT: i16 = 36;
@@ -216,7 +218,9 @@ fn homescreen_position_text(
     buffer: &mut BufferText,
     icon_buffer: &mut [u8],
 ) -> HomescreenTextInfo {
-    let text_width = display::text_width(text.text, text.style.text_font.into());
+    let text_width = text
+        .text
+        .map(|t| display::text_width(t, text.style.text_font.into()));
     let font_max_height = display::text_max_height(text.style.text_font.into());
     let font_baseline = display::text_baseline(text.style.text_font.into());
     let text_width_clamped = text_width.clamp(0, screen().width());
@@ -253,7 +257,8 @@ fn homescreen_position_text(
         None
     };
 
-    display::text_into_buffer(text.text, text.style.text_font.into(), buffer, 0);
+    text.text
+        .map(|t| display::text_into_buffer(t, text.style.text_font.into(), buffer, 0));
 
     HomescreenTextInfo {
         text_area,

@@ -1,16 +1,17 @@
 use crate::{
-    strutil::StringType,
+    strutil::{StringType, TString},
     time::{Duration, Instant},
     ui::{
         animation::Animation,
-        component::{Component, Event, EventCtx},
-        display::{self, Color, Font},
+        component::{Child, Component, Event, EventCtx},
+        constant,
+        display::{self, Color, Font, LOADER_MAX},
         geometry::{Offset, Rect},
         util::animation_disabled,
     },
 };
 
-use super::theme;
+use super::{theme, Progress};
 
 pub const DEFAULT_DURATION_MS: u32 = 1000;
 pub const SHRINKING_DURATION_MS: u32 = 500;
@@ -27,25 +28,19 @@ enum State {
     Grown,
 }
 
-pub struct Loader<T>
-where
-    T: StringType,
-{
+pub struct Loader {
     area: Rect,
     state: State,
     growing_duration: Duration,
     shrinking_duration: Duration,
-    text_overlay: display::TextOverlay<T>,
+    text_overlay: display::TextOverlay,
     styles: LoaderStyleSheet,
 }
 
-impl<T> Loader<T>
-where
-    T: StringType,
-{
+impl Loader {
     pub const SIZE: Offset = Offset::new(120, 120);
 
-    pub fn new(text_overlay: display::TextOverlay<T>, styles: LoaderStyleSheet) -> Self {
+    pub fn new(text_overlay: display::TextOverlay, styles: LoaderStyleSheet) -> Self {
         Self {
             area: Rect::zero(),
             state: State::Initial,
@@ -56,8 +51,8 @@ where
         }
     }
 
-    pub fn text(text: T, styles: LoaderStyleSheet) -> Self {
-        let text_overlay = display::TextOverlay::new(text, styles.normal.font);
+    pub fn text<T: Into<TString<'static>>>(text: T, styles: LoaderStyleSheet) -> Self {
+        let text_overlay = display::TextOverlay::new(text.into(), styles.normal.font);
 
         Self::new(text_overlay, styles)
     }
@@ -76,18 +71,18 @@ where
         self.growing_duration
     }
 
-    pub fn get_text(&self) -> &T {
+    pub fn get_text(&self) -> TString<'static> {
         self.text_overlay.get_text()
     }
 
     /// Change the text of the loader.
-    pub fn set_text(&mut self, text: T) {
-        self.text_overlay.set_text(text);
+    pub fn set_text<T: Into<TString<'static>>>(&mut self, text: T) {
+        self.text_overlay.set_text(text.into());
     }
 
     /// Return width of given text according to current style.
-    pub fn get_text_width(&self, text: &T) -> i16 {
-        self.styles.normal.font.text_width(text.as_ref())
+    pub fn get_text_width(&self, text: &TString<'static>) -> i16 {
+        text.map(|t| self.styles.normal.font.text_width(t))
     }
 
     pub fn start_growing(&mut self, ctx: &mut EventCtx, now: Instant) {
@@ -171,10 +166,7 @@ where
     }
 }
 
-impl<T> Component for Loader<T>
-where
-    T: StringType,
-{
+impl Component for Loader {
     type Msg = LoaderMsg;
 
     fn place(&mut self, bounds: Rect) -> Rect {
@@ -186,10 +178,9 @@ where
     }
 
     fn event(&mut self, ctx: &mut EventCtx, event: Event) -> Option<Self::Msg> {
-        let now = Instant::now();
-
         if let Event::Timer(EventCtx::ANIM_FRAME_TIMER) = event {
             if self.is_animating() {
+                let now = Instant::now();
                 if self.is_completely_grown(now) {
                     self.state = State::Grown;
                     ctx.request_paint();
@@ -256,16 +247,100 @@ impl LoaderStyleSheet {
     }
 }
 
-// DEBUG-ONLY SECTION BELOW
-
-#[cfg(feature = "ui_debug")]
-impl<T> crate::trace::Trace for Loader<T>
+pub struct ProgressLoader<T>
 where
     T: StringType,
 {
+    loader: Child<Progress<T>>,
+    duration_ms: u32,
+    start_time: Option<Instant>,
+}
+
+impl<T> ProgressLoader<T>
+where
+    T: StringType + Clone,
+{
+    const LOADER_FRAMES_DEFAULT: u32 = 20;
+
+    pub fn new(loader_description: T, duration_ms: u32) -> Self {
+        Self {
+            loader: Child::new(
+                Progress::new(false, loader_description).with_icon(theme::ICON_LOCK_SMALL),
+            ),
+            duration_ms,
+            start_time: None,
+        }
+    }
+
+    pub fn start(&mut self, ctx: &mut EventCtx) {
+        self.start_time = Some(Instant::now());
+        self.loader.event(ctx, Event::Progress(0, ""));
+        self.loader.mutate(ctx, |ctx, loader| {
+            loader.request_paint(ctx);
+        });
+        ctx.request_anim_frame();
+    }
+
+    pub fn stop(&mut self, _ctx: &mut EventCtx) {
+        self.start_time = None;
+    }
+
+    fn is_animating(&self) -> bool {
+        self.start_time.is_some()
+    }
+
+    fn percentage(&self, now: Instant) -> u32 {
+        if let Some(start_time) = self.start_time {
+            let elapsed = now.saturating_duration_since(start_time);
+            let elapsed_ms = elapsed.to_millis();
+            (elapsed_ms * 100) / self.duration_ms
+        } else {
+            0
+        }
+    }
+}
+
+impl<T> Component for ProgressLoader<T>
+where
+    T: StringType + Clone,
+{
+    type Msg = LoaderMsg;
+
+    fn place(&mut self, bounds: Rect) -> Rect {
+        self.loader.place(constant::screen());
+        bounds
+    }
+
+    fn event(&mut self, ctx: &mut EventCtx, event: Event) -> Option<Self::Msg> {
+        if let Event::Timer(EventCtx::ANIM_FRAME_TIMER) = event {
+            if self.is_animating() {
+                let now = Instant::now();
+                let percentage = self.percentage(now);
+                let new_loader_value = (percentage * LOADER_MAX as u32) / 100;
+                self.loader
+                    .event(ctx, Event::Progress(new_loader_value as u16, ""));
+                // Returning only after the loader was fully painted
+                if percentage >= 100 {
+                    return Some(LoaderMsg::GrownCompletely);
+                }
+                ctx.request_anim_frame();
+            }
+        }
+        None
+    }
+
+    fn paint(&mut self) {
+        self.loader.paint();
+    }
+}
+
+// DEBUG-ONLY SECTION BELOW
+
+#[cfg(feature = "ui_debug")]
+impl crate::trace::Trace for Loader {
     fn trace(&self, t: &mut dyn crate::trace::Tracer) {
         t.component("Loader");
-        t.string("text", self.get_text().as_ref());
+        t.string("text", self.get_text());
         t.int("duration", self.get_duration().to_millis() as i64);
     }
 }

@@ -111,6 +111,7 @@ message Features {
         Capability_ShamirGroups = 16 [(bitcoin_only) = true];
         Capability_PassphraseEntry = 17 [(bitcoin_only) = true];  // the device is capable of passphrase entry directly on the device
         Capability_Solana = 18;
+        Capability_Translations = 19 [(bitcoin_only) = true];
     }
     optional BackupType backup_type = 31;       // type of device backup (BIP-39 / SLIP-39 basic / SLIP-39 advanced)
     optional bool sd_card_present = 32;         // is SD card present
@@ -131,6 +132,7 @@ message Features {
     optional uint32 homescreen_width = 47;         // homescreen width in pixels
     optional uint32 homescreen_height = 48;         // homescreen height in pixels
     optional bool bootloader_locked = 49;       // bootloader is locked
+    optional bool language_version_matches = 50 [default=true];  // translation blob version matches firmware version
 }
 
 /**
@@ -161,13 +163,13 @@ message EndSession {
 }
 
 /**
- * Request: change language and/or label of the device
+ * Request: change some property of the device, e.g. label or homescreen
  * @start
  * @next Success
  * @next Failure
  */
 message ApplySettings {
-    optional string language = 1;
+    optional string language = 1 [deprecated=true];
     optional string label = 2;
     optional bool use_passphrase = 3;
     optional bytes homescreen = 4;
@@ -178,6 +180,47 @@ message ApplySettings {
     optional SafetyCheckLevel safety_checks = 9;  // Safety check level, set to Prompt to limit path namespace enforcement
     optional bool experimental_features = 10;  // enable experimental message types
     optional bool hide_passphrase_from_host = 11;  // do not show passphrase coming from host
+}
+
+/**
+ * Request: change the device language via translation data.
+ * Does not send the translation data itself, as they are too large for one message.
+ * Device will request the translation data in chunks.
+ * @start
+ * @next TranslationDataRequest
+ * @next Failure
+ */
+message ChangeLanguage {
+    // byte length of the whole translation blob (set to 0 for default language - english)
+    required uint32 data_length = 1;
+    // Prompt the user on screen.
+    // In certain conditions (such as freshly installed device), the confirmation prompt
+    // is not mandatory. Setting show_display=false will skip the prompt if that's
+    // the case. If the device does not allow skipping the prompt, a request with
+    // show_display=false will return a failure. (This way the host can safely try
+    // to change the language without invoking a prompt.)
+    // Setting show_display to true will always show the prompt.
+    // Leaving the option unset will show the prompt only when necessary.
+    optional bool show_display = 2;
+}
+
+/**
+ * Response: Device asks for more data from transaction payload.
+ * @end
+ * @next TranslationDataAck
+ */
+ message TranslationDataRequest {
+    required uint32 data_length = 1;    // Number of bytes being requested
+    required uint32 data_offset = 2;    // Offset of the first byte being requested
+}
+
+/**
+ * Request: Translation payload data.
+ * @next TranslationDataRequest
+ * @next Success
+ */
+message TranslationDataAck {
+    required bytes data_chunk = 1;  // Bytes from translation payload
 }
 
 /**
@@ -320,7 +363,7 @@ message LoadDevice {
     repeated string mnemonics = 1;                          // seed encoded as mnemonic (12, 18 or 24 words for BIP39, 20 or 33 for SLIP39)
     optional string pin = 3;                                // set PIN protection
     optional bool passphrase_protection = 4;                // enable master node encryption using passphrase
-    optional string language = 5 [default='en-US'];         // device language (IETF BCP 47 language tag)
+    optional string language = 5 [deprecated=true];         // deprecated (use ChangeLanguage)
     optional string label = 6;                              // device label
     optional bool skip_checksum = 7;                        // do not test mnemonic for valid BIP-39 checksum
     optional uint32 u2f_counter = 8;                        // U2F counter
@@ -339,7 +382,7 @@ message ResetDevice {
     optional uint32 strength = 2 [default=256];             // strength of seed in bits
     optional bool passphrase_protection = 3;                // enable master node encryption using passphrase
     optional bool pin_protection = 4;                       // enable PIN protection
-    optional string language = 5 [default='en-US'];         // device language (IETF BCP 47 language tag)
+    optional string language = 5 [deprecated=true];         // deprecated (use ChangeLanguage)
     optional string label = 6;                              // device label
     optional uint32 u2f_counter = 7;                        // U2F counter
     optional bool skip_backup = 8;                          // postpone seed backup to BackupDevice workflow
@@ -380,7 +423,7 @@ message RecoveryDevice {
     optional uint32 word_count = 1;                     // number of words in BIP-39 mnemonic
     optional bool passphrase_protection = 2;            // enable master node encryption using passphrase
     optional bool pin_protection = 3;                   // enable PIN protection
-    optional string language = 4;                       // device language (IETF BCP 47 language tag)
+    optional string language = 4 [deprecated=true];     // deprecated (use ChangeLanguage)
     optional string label = 5;                          // device label
     optional bool enforce_wordlist = 6;                 // enforce BIP-39 wordlist during the process
     // 7 reserved for unused recovery method
@@ -487,11 +530,17 @@ message CancelAuthorization {
  * @next Success
  */
 message RebootToBootloader {
+    // Action to be performed after rebooting to bootloader
     optional BootCommand boot_command = 1 [default=STOP_AND_WAIT];
+    // Firmware header to be flashed after rebooting to bootloader
     optional bytes firmware_header = 2;
+    // Length of language blob to be installed before upgrading firmware
+    optional uint32 language_data_length = 3 [default=0];
 
     enum BootCommand {
+        // Go to bootloader menu
         STOP_AND_WAIT = 0;
+        // Connect to host and wait for firmware update
         INSTALL_UPGRADE = 1;
     }
 }

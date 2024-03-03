@@ -99,9 +99,9 @@ void display_text_render_buffer(const char *text, int textlen, int font,
   int baseline = font_baseline(font);
 
   // render glyphs
-  for (int c_idx = 0; c_idx < textlen; c_idx++) {
-    const uint8_t *g = font_get_glyph(font, (uint8_t)text[c_idx]);
-    if (!g) continue;
+  font_glyph_iter_t iter = font_glyph_iter_init(font, (uint8_t *)text, textlen);
+  const uint8_t *g = NULL;
+  while (font_next_glyph(&iter, &g)) {
     const uint8_t w = g[0];      // width
     const uint8_t h = g[1];      // height
     const uint8_t adv = g[2];    // advance
@@ -155,147 +155,6 @@ void display_text_render_buffer(const char *text, int textlen, int font,
   }
 }
 
-// see docs/misc/toif.md for definition of the TOIF format
-bool display_toif_info(const uint8_t *data, uint32_t len, uint16_t *out_w,
-                       uint16_t *out_h, toif_format_t *out_format) {
-  if (len < 12 || memcmp(data, "TOI", 3) != 0) {
-    return false;
-  }
-  toif_format_t format = false;
-  if (data[3] == 'f') {
-    format = TOIF_FULL_COLOR_BE;
-  } else if (data[3] == 'g') {
-    format = TOIF_GRAYSCALE_OH;
-  } else if (data[3] == 'F') {
-    format = TOIF_FULL_COLOR_LE;
-  } else if (data[3] == 'G') {
-    format = TOIF_GRAYSCALE_EH;
-  } else {
-    return false;
-  }
-
-  uint16_t w = *(uint16_t *)(data + 4);
-  uint16_t h = *(uint16_t *)(data + 6);
-
-  uint32_t datalen = *(uint32_t *)(data + 8);
-  if (datalen != len - 12) {
-    return false;
-  }
-
-  if (out_w != NULL && out_h != NULL && out_format != NULL) {
-    *out_w = w;
-    *out_h = h;
-    *out_format = format;
-  }
-  return true;
-}
-
-#ifndef TREZOR_PRINT_DISABLE
-
-#define DISPLAY_PRINT_COLS (DISPLAY_RESX / 6)
-#define DISPLAY_PRINT_ROWS (DISPLAY_RESY / 8)
-static char display_print_buf[DISPLAY_PRINT_ROWS][DISPLAY_PRINT_COLS];
-static uint16_t display_print_fgcolor = COLOR_WHITE,
-                display_print_bgcolor = COLOR_BLACK;
-
-// set colors for display_print function
-void display_print_color(uint16_t fgcolor, uint16_t bgcolor) {
-  display_print_fgcolor = fgcolor;
-  display_print_bgcolor = bgcolor;
-}
-
-// display text using bitmap font
-void display_print(const char *text, int textlen) {
-  static uint8_t row = 0, col = 0;
-
-  // determine text length if not provided
-  if (textlen < 0) {
-    textlen = strlen(text);
-  }
-
-  // print characters to internal buffer (display_print_buf)
-  for (int i = 0; i < textlen; i++) {
-    switch (text[i]) {
-      case '\r':
-        break;
-      case '\n':
-        row++;
-        col = 0;
-        break;
-      default:
-        display_print_buf[row][col] = text[i];
-        col++;
-        break;
-    }
-
-    if (col >= DISPLAY_PRINT_COLS) {
-      col = 0;
-      row++;
-    }
-
-    if (row >= DISPLAY_PRINT_ROWS) {
-      for (int j = 0; j < DISPLAY_PRINT_ROWS - 1; j++) {
-        memcpy(display_print_buf[j], display_print_buf[j + 1],
-               DISPLAY_PRINT_COLS);
-      }
-      memzero(display_print_buf[DISPLAY_PRINT_ROWS - 1], DISPLAY_PRINT_COLS);
-      row = DISPLAY_PRINT_ROWS - 1;
-    }
-  }
-
-  // render buffer to display
-  display_set_window(0, 0, DISPLAY_RESX - 1, DISPLAY_RESY - 1);
-  for (int i = 0; i < DISPLAY_RESX * DISPLAY_RESY; i++) {
-    int x = (i % DISPLAY_RESX);
-    int y = (i / DISPLAY_RESX);
-    const int j = y % 8;
-    y /= 8;
-    const int k = x % 6;
-    x /= 6;
-    char c = 0;
-    if (x < DISPLAY_PRINT_COLS && y < DISPLAY_PRINT_ROWS) {
-      c = display_print_buf[y][x] & 0x7F;
-      // char invert = display_print_buf[y][x] & 0x80;
-    } else {
-      c = ' ';
-    }
-    if (c < ' ') {
-      c = ' ';
-    }
-    const uint8_t *g = Font_Bitmap + (5 * (c - ' '));
-    if (k < 5 && (g[k] & (1 << j))) {
-      PIXELDATA(display_print_fgcolor);
-    } else {
-      PIXELDATA(display_print_bgcolor);
-    }
-  }
-  display_pixeldata_dirty();
-  display_refresh();
-}
-
-#ifdef TREZOR_EMULATOR
-#define mini_vsnprintf vsnprintf
-#include <stdio.h>
-#else
-#include "mini_printf.h"
-#endif
-
-// variadic display_print
-void display_printf(const char *fmt, ...) {
-  if (!strchr(fmt, '%')) {
-    display_print(fmt, strlen(fmt));
-  } else {
-    va_list va;
-    va_start(va, fmt);
-    char buf[256] = {0};
-    int len = mini_vsnprintf(buf, sizeof(buf), fmt, va);
-    display_print(buf, len);
-    va_end(va);
-  }
-}
-
-#endif  // TREZOR_PRINT_DISABLE
-
 #ifdef FRAMEBUFFER
 static void display_text_render(int x, int y, const char *text, int textlen,
                                 int font, uint16_t fgcolor, uint16_t bgcolor) {
@@ -312,9 +171,9 @@ static void display_text_render(int x, int y, const char *text, int textlen,
   set_color_table(colortable, fgcolor, bgcolor);
 
   // render glyphs
-  for (int c_idx = 0; c_idx < textlen; c_idx++) {
-    const uint8_t *g = font_get_glyph(font, (uint8_t)text[c_idx]);
-    if (!g) continue;
+  font_glyph_iter_t iter = font_glyph_iter_init(font, (uint8_t *)text, textlen);
+  const uint8_t *g = NULL;
+  while (font_next_glyph(&iter, &g)) {
     const uint8_t w = g[0];      // width
     const uint8_t h = g[1];      // height
     const uint8_t adv = g[2];    // advance
@@ -375,9 +234,9 @@ static void display_text_render(int x, int y, const char *text, int textlen,
   set_color_table(colortable, fgcolor, bgcolor);
 
   // render glyphs
-  for (int i = 0; i < textlen; i++) {
-    const uint8_t *g = font_get_glyph(font, (uint8_t)text[i]);
-    if (!g) continue;
+  font_glyph_iter_t iter = font_glyph_iter_init(font, (uint8_t *)text, textlen);
+  const uint8_t *g = NULL;
+  while (font_next_glyph(&iter, &g)) {
     const uint8_t w = g[0];      // width
     const uint8_t h = g[1];      // height
     const uint8_t adv = g[2];    // advance
@@ -432,7 +291,7 @@ void display_text_center(int x, int y, const char *text, int textlen, int font,
                          uint16_t fgcolor, uint16_t bgcolor) {
   x += DISPLAY_OFFSET.x;
   y += DISPLAY_OFFSET.y;
-  int w = display_text_width(text, textlen, font);
+  int w = font_text_width(font, text, textlen);
   display_text_render(x - w / 2, y, text, textlen, font, fgcolor, bgcolor);
 }
 
@@ -440,63 +299,8 @@ void display_text_right(int x, int y, const char *text, int textlen, int font,
                         uint16_t fgcolor, uint16_t bgcolor) {
   x += DISPLAY_OFFSET.x;
   y += DISPLAY_OFFSET.y;
-  int w = display_text_width(text, textlen, font);
+  int w = font_text_width(font, text, textlen);
   display_text_render(x - w, y, text, textlen, font, fgcolor, bgcolor);
-}
-
-// compute the width of the text (in pixels)
-int display_text_width(const char *text, int textlen, int font) {
-  int width = 0;
-  // determine text length if not provided
-  if (textlen < 0) {
-    textlen = strlen(text);
-  }
-  for (int i = 0; i < textlen; i++) {
-    const uint8_t *g = font_get_glyph(font, (uint8_t)text[i]);
-    if (!g) continue;
-    const uint8_t adv = g[2];  // advance
-    width += adv;
-    /*
-    if (i != textlen - 1) {
-        const uint8_t adv = g[2]; // advance
-        width += adv;
-    } else { // last character
-        const uint8_t w = g[0]; // width
-        const uint8_t bearX = g[3]; // bearingX
-        width += (bearX + w);
-    }
-    */
-  }
-  return width;
-}
-
-// Returns how many characters of the string can be used before exceeding
-// the requested width. Tries to avoid breaking words if possible.
-int display_text_split(const char *text, int textlen, int font,
-                       int requested_width) {
-  int width = 0;
-  int lastspace = 0;
-  // determine text length if not provided
-  if (textlen < 0) {
-    textlen = strlen(text);
-  }
-  for (int i = 0; i < textlen; i++) {
-    if (text[i] == ' ') {
-      lastspace = i;
-    }
-    const uint8_t *g = font_get_glyph(font, (uint8_t)text[i]);
-    if (!g) continue;
-    const uint8_t adv = g[2];  // advance
-    width += adv;
-    if (width > requested_width) {
-      if (lastspace > 0) {
-        return lastspace;
-      } else {
-        return i;
-      }
-    }
-  }
-  return textlen;
 }
 
 #ifdef TREZOR_PRODTEST
@@ -551,49 +355,4 @@ void display_offset(int set_xy[2], int *get_x, int *get_y) {
   }
   *get_x = DISPLAY_OFFSET.x;
   *get_y = DISPLAY_OFFSET.y;
-}
-
-void display_fade(int start, int end, int delay) {
-#ifdef USE_BACKLIGHT
-  for (int i = 0; i < 100; i++) {
-    display_backlight(start + i * (end - start) / 100);
-    hal_delay(delay / 100);
-  }
-  display_backlight(end);
-#endif
-}
-
-#define UTF8_IS_CONT(ch) (((ch)&0xC0) == 0x80)
-
-void display_utf8_substr(const char *buf_start, size_t buf_len, int char_off,
-                         int char_len, const char **out_start, int *out_len) {
-  size_t i = 0;
-
-  for (; i < buf_len; i++) {
-    if (char_off == 0) {
-      break;
-    }
-    if (!UTF8_IS_CONT(buf_start[i])) {
-      char_off--;
-    }
-  }
-  size_t i_start = i;
-
-  for (; i < buf_len; i++) {
-    if (char_len == 0) {
-      break;
-    }
-    if (!UTF8_IS_CONT(buf_start[i])) {
-      char_len--;
-    }
-  }
-
-  for (; i < buf_len; i++) {
-    if (!UTF8_IS_CONT(buf_start[i])) {
-      break;
-    }
-  }
-
-  *out_start = buf_start + i_start;
-  *out_len = i - i_start;
 }

@@ -1,10 +1,9 @@
-from common import *
+from common import *  # isort:skip
 
 from trezor.ui import display
 
 
 class TestDisplay(unittest.TestCase):
-
     def test_refresh(self):
         display.refresh()
 
@@ -26,5 +25,5 @@ class TestDisplay(unittest.TestCase):
         pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

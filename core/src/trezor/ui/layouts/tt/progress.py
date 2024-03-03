@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 import trezorui2
-from trezor import ui
+from trezor import TR, ui
 
 if TYPE_CHECKING:
     from typing import Any
@@ -18,6 +18,7 @@ class RustProgress:
         ui.backlight_fade(ui.style.BACKLIGHT_DIM)
         self.layout.attach_timer_fn(self.set_timer)
         self.layout.paint()
+        ui.refresh()
         ui.backlight_fade(ui.style.BACKLIGHT_NORMAL)
 
     def set_timer(self, token: int, deadline: int) -> None:
@@ -31,10 +32,11 @@ class RustProgress:
 
 
 def progress(
-    message: str = "PLEASE WAIT",
+    message: str | None = None,
     description: str | None = None,
     indeterminate: bool = False,
 ) -> ProgressLayout:
+    message = message or TR.progress__please_wait  # def_arg
     return RustProgress(
         layout=trezorui2.show_progress(
             title=message.upper(),
@@ -59,12 +61,12 @@ def pin_progress(message: str, description: str) -> ProgressLayout:
 
 
 def monero_keyimage_sync_progress() -> ProgressLayout:
-    return progress("SYNCING")
+    return progress("", TR.progress__syncing)
 
 
 def monero_live_refresh_progress() -> ProgressLayout:
-    return progress("REFRESHING", indeterminate=True)
+    return progress("", TR.progress__refreshing, indeterminate=True)
 
 
 def monero_transaction_progress_inner() -> ProgressLayout:
-    return progress("SIGNING TRANSACTION")
+    return progress("", TR.progress__signing_transaction)

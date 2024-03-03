@@ -321,6 +321,8 @@ apps.management.backup_device
 import apps.management.backup_device
 apps.management.backup_types
 import apps.management.backup_types
+apps.management.change_language
+import apps.management.change_language
 apps.management.change_pin
 import apps.management.change_pin
 apps.management.change_wipe_code
@@ -533,6 +535,8 @@ if not utils.BITCOIN_ONLY:
     import apps.ethereum.sign_tx_eip1559
     apps.ethereum.sign_typed_data
     import apps.ethereum.sign_typed_data
+    apps.ethereum.staking_tx_constants
+    import apps.ethereum.staking_tx_constants
     apps.ethereum.tokens
     import apps.ethereum.tokens
     apps.ethereum.verify_message
